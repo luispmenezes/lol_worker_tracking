@@ -1,0 +1,63 @@
+from datetime import datetime, timedelta
+
+import matplotlib.pyplot as plt
+import numpy as np
+import requests
+from bs4 import BeautifulSoup
+
+summoner_id = '27114925'
+
+base_url = 'https://euw.op.gg/summoner/matches/ajax/averageAndList/summonerId=%s' % summoner_id
+
+
+def parse_matches(last_info_ts):
+    print(last_info_ts)
+    url = base_url
+    if last_info_ts is not None:
+        url += '&startInfo=%d' % last_info_ts
+    print(url)
+    response = requests.get(url)
+    if 299 >= response.status_code >= 200:
+        last_info = datetime.fromtimestamp(int(response.json()['lastInfo']))
+        html = response.json()['html']
+        soup = BeautifulSoup(html, "html.parser")
+        ts_list = soup.find_all('span', class_='_timeago')
+        game_map = [0] * 9
+        for ts in ts_list:
+            game_time = datetime.fromtimestamp(int(ts['data-datetime']))
+            if game_time.weekday() < 5 and 9 <= game_time.hour < 18:
+                game_map[game_time.hour - 9] += 1
+            # last_info = game_time
+
+        print(last_info)
+        return last_info, game_map
+    else:
+        print(response)
+        exit(-1)
+
+
+ts_limit = datetime.now() - timedelta(days=60)
+last_info, game_map = parse_matches(None)
+
+while last_info > ts_limit:
+    last_info, new_game_map = parse_matches(last_info.timestamp())
+    for i in range(len(new_game_map)):
+        game_map[i] += new_game_map[i]
+    # time.sleep(5)
+
+print(game_map)
+# fig = plt.figure()
+# ax = fig.add_axes([0, 0, 1, 1])
+# ax.bar([str(i) for i in range(9, 19)], game_map)
+# plt.show()
+
+
+objects = [str(i) for i in range(9, 18)]
+y_pos = np.arange(len(objects))
+
+plt.bar(y_pos, game_map, align='center', alpha=0.5)
+plt.xticks(y_pos, objects)
+plt.ylabel('Usage')
+plt.title('Games per week')
+
+plt.show()
